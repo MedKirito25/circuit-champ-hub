@@ -162,7 +162,13 @@ export async function getTeamMatches(teamId: string): Promise<Match[]> {
 }
 
 // Admin mutations
-export async function createTeam(team: Partial<Team>): Promise<Team> {
+export async function createTeam(team: {
+  name: string;
+  category_id: number;
+  division_id: number;
+  robot_name?: string;
+  robot_description?: string;
+}): Promise<Team> {
   const { data, error } = await supabase
     .from("teams")
     .insert([team])
@@ -194,7 +200,16 @@ export async function deleteTeam(id: string): Promise<void> {
   if (error) throw error;
 }
 
-export async function createMatch(match: Partial<Match>): Promise<Match> {
+export async function createMatch(match: {
+  category_id: number;
+  division_id: number;
+  round_name?: string;
+  round_number: number;
+  match_number: number;
+  team1_id: string;
+  team2_id: string;
+  status?: string;
+}): Promise<Match> {
   const { data, error } = await supabase
     .from("matches")
     .insert([match])
@@ -225,15 +240,34 @@ export async function updateMatchResult(matchId: string, winnerId: string): Prom
 
   if (updateMatchError) throw updateMatchError;
 
-  // Update winner wins
-  const { error: winnerError } = await supabase.rpc("increment_wins", { team_id: winnerId });
-  
-  // Update loser losses and elimination
-  if (loserId) {
-    const { error: loserError } = await supabase
+  // Get current winner stats and update
+  const { data: winner } = await supabase
+    .from("teams")
+    .select("wins")
+    .eq("id", winnerId)
+    .single();
+
+  if (winner) {
+    await supabase
       .from("teams")
-      .update({ losses: supabase.rpc ? 1 : 1, is_eliminated: true })
-      .eq("id", loserId);
+      .update({ wins: winner.wins + 1 })
+      .eq("id", winnerId);
+  }
+
+  // Get current loser stats and update
+  if (loserId) {
+    const { data: loser } = await supabase
+      .from("teams")
+      .select("losses")
+      .eq("id", loserId)
+      .single();
+
+    if (loser) {
+      await supabase
+        .from("teams")
+        .update({ losses: loser.losses + 1, is_eliminated: true })
+        .eq("id", loserId);
+    }
   }
 }
 
