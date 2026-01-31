@@ -1,17 +1,22 @@
 import { useEffect, useState } from "react";
-import { useNavigate, Link } from "react-router-dom";
+import { useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { Header } from "@/components/Header";
 import { Footer } from "@/components/Footer";
 import { useTeams, useMatches, useCategories, useDivisions } from "@/hooks/useTournamentData";
+import { useGroupsWithTeams } from "@/hooks/useGroupData";
 import {
   createTeam,
-  updateTeam,
   deleteTeam,
-  generateBracket,
   updateMatchResult,
   Team,
 } from "@/lib/supabase-queries";
+import {
+  generateGroupStage,
+  setGroupWinner,
+  advanceToNextStage,
+  GroupWithTeams,
+} from "@/lib/group-queries";
 import {
   Shield,
   Users,
@@ -24,6 +29,9 @@ import {
   CheckCircle,
   Bot,
   Swords,
+  Crown,
+  ArrowRight,
+  Layers,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -46,11 +54,12 @@ import {
 } from "@/components/ui/dialog";
 import { useToast } from "@/hooks/use-toast";
 import { useQueryClient } from "@tanstack/react-query";
+import { cn } from "@/lib/utils";
 
 export default function AdminDashboard() {
   const [user, setUser] = useState<any>(null);
   const [loading, setLoading] = useState(true);
-  const [activeTab, setActiveTab] = useState<"teams" | "matches">("teams");
+  const [activeTab, setActiveTab] = useState<"teams" | "groups">("teams");
   const navigate = useNavigate();
   const { toast } = useToast();
   const queryClient = useQueryClient();
@@ -63,16 +72,24 @@ export default function AdminDashboard() {
   const [newRobotName, setNewRobotName] = useState("");
   const [addingTeam, setAddingTeam] = useState(false);
 
-  // Generate Bracket Modal State
-  const [generateBracketOpen, setGenerateBracketOpen] = useState(false);
-  const [bracketCategory, setBracketCategory] = useState("");
-  const [bracketDivision, setBracketDivision] = useState("");
-  const [generatingBracket, setGeneratingBracket] = useState(false);
+  // Generate Groups Modal State
+  const [generateGroupsOpen, setGenerateGroupsOpen] = useState(false);
+  const [groupCategory, setGroupCategory] = useState("");
+  const [groupDivision, setGroupDivision] = useState("");
+  const [generatingGroups, setGeneratingGroups] = useState(false);
 
-  const { data: teams = [], refetch: refetchTeams } = useTeams();
-  const { data: matches = [], refetch: refetchMatches } = useMatches();
+  // Selected category/division for group management
+  const [selectedCategory, setSelectedCategory] = useState<string>("1");
+  const [selectedDivision, setSelectedDivision] = useState<string>("2");
+
+  const { data: teams = [] } = useTeams();
+  const { data: matches = [] } = useMatches();
   const { data: categories = [] } = useCategories();
   const { data: divisions = [] } = useDivisions();
+  const { data: groups = [], refetch: refetchGroups } = useGroupsWithTeams(
+    Number(selectedCategory),
+    Number(selectedDivision)
+  );
 
   useEffect(() => {
     const checkAuth = async () => {
@@ -163,8 +180,8 @@ export default function AdminDashboard() {
     }
   };
 
-  const handleGenerateBracket = async () => {
-    if (!bracketCategory || !bracketDivision) {
+  const handleGenerateGroups = async () => {
+    if (!groupCategory || !groupDivision) {
       toast({
         title: "Missing fields",
         description: "Please select category and division.",
@@ -173,31 +190,72 @@ export default function AdminDashboard() {
       return;
     }
 
-    setGeneratingBracket(true);
+    setGeneratingGroups(true);
     try {
-      await generateBracket(Number(bracketCategory), Number(bracketDivision));
+      await generateGroupStage(Number(groupCategory), Number(groupDivision));
 
       toast({
-        title: "Bracket generated!",
-        description: "The tournament bracket has been created.",
+        title: "Groups generated!",
+        description: "Teams have been divided into groups.",
       });
 
-      setGenerateBracketOpen(false);
-      setBracketCategory("");
-      setBracketDivision("");
+      setGenerateGroupsOpen(false);
+      setGroupCategory("");
+      setGroupDivision("");
+      queryClient.invalidateQueries({ queryKey: ["groupsWithTeams"] });
       queryClient.invalidateQueries({ queryKey: ["matches"] });
+      queryClient.invalidateQueries({ queryKey: ["teams"] });
     } catch (error: any) {
       toast({
-        title: "Error generating bracket",
+        title: "Error generating groups",
         description: error.message,
         variant: "destructive",
       });
     } finally {
-      setGeneratingBracket(false);
+      setGeneratingGroups(false);
     }
   };
 
-  const handleSetWinner = async (matchId: string, winnerId: string) => {
+  const handleSetGroupWinner = async (groupId: string, winnerId: string) => {
+    try {
+      await setGroupWinner(groupId, winnerId);
+      toast({
+        title: "Winner selected!",
+        description: "Group winner has been set.",
+      });
+      queryClient.invalidateQueries({ queryKey: ["groupsWithTeams"] });
+      queryClient.invalidateQueries({ queryKey: ["teams"] });
+    } catch (error: any) {
+      toast({
+        title: "Error setting winner",
+        description: error.message,
+        variant: "destructive",
+      });
+    }
+  };
+
+  const handleAdvanceStage = async () => {
+    try {
+      const result = await advanceToNextStage(Number(selectedCategory), Number(selectedDivision));
+      toast({
+        title: result.advanced ? "Stage advanced!" : "Cannot advance",
+        description: result.message,
+        variant: result.advanced ? "default" : "destructive",
+      });
+      if (result.advanced) {
+        queryClient.invalidateQueries({ queryKey: ["groupsWithTeams"] });
+        queryClient.invalidateQueries({ queryKey: ["matches"] });
+      }
+    } catch (error: any) {
+      toast({
+        title: "Error advancing stage",
+        description: error.message,
+        variant: "destructive",
+      });
+    }
+  };
+
+  const handleSetMatchWinner = async (matchId: string, winnerId: string) => {
     try {
       await updateMatchResult(matchId, winnerId);
       toast({
@@ -206,6 +264,7 @@ export default function AdminDashboard() {
       });
       queryClient.invalidateQueries({ queryKey: ["matches"] });
       queryClient.invalidateQueries({ queryKey: ["teams"] });
+      queryClient.invalidateQueries({ queryKey: ["groupsWithTeams"] });
     } catch (error: any) {
       toast({
         title: "Error saving result",
@@ -224,6 +283,11 @@ export default function AdminDashboard() {
   }
 
   const pendingMatches = matches.filter((m) => m.status === "pending");
+  const incompleteGroups = groups.filter((g) => !g.is_completed);
+
+  // Get unique stages
+  const stages = [...new Set(groups.map(g => g.stage_number))].sort((a, b) => a - b);
+  const currentStage = stages.length > 0 ? Math.max(...stages) : 0;
 
   return (
     <div className="min-h-screen flex flex-col">
@@ -266,28 +330,28 @@ export default function AdminDashboard() {
             </div>
             <div className="glass-card p-4">
               <div className="flex items-center gap-3">
-                <Swords className="w-8 h-8 text-secondary" />
+                <Layers className="w-8 h-8 text-secondary" />
                 <div>
-                  <div className="text-2xl font-bold">{matches.length}</div>
-                  <div className="text-sm text-muted-foreground">Matches</div>
+                  <div className="text-2xl font-bold">{groups.length}</div>
+                  <div className="text-sm text-muted-foreground">Groups</div>
                 </div>
               </div>
             </div>
             <div className="glass-card p-4">
               <div className="flex items-center gap-3">
-                <Zap className="w-8 h-8 text-yellow-400" />
+                <Zap className="w-8 h-8 text-warning" />
                 <div>
-                  <div className="text-2xl font-bold">{pendingMatches.length}</div>
+                  <div className="text-2xl font-bold">{incompleteGroups.length}</div>
                   <div className="text-sm text-muted-foreground">Pending</div>
                 </div>
               </div>
             </div>
             <div className="glass-card p-4">
               <div className="flex items-center gap-3">
-                <CheckCircle className="w-8 h-8 text-green-400" />
+                <CheckCircle className="w-8 h-8 text-success" />
                 <div>
                   <div className="text-2xl font-bold">
-                    {matches.filter((m) => m.status === "completed").length}
+                    {groups.filter((g) => g.is_completed).length}
                   </div>
                   <div className="text-sm text-muted-foreground">Completed</div>
                 </div>
@@ -306,12 +370,12 @@ export default function AdminDashboard() {
               Manage Teams
             </Button>
             <Button
-              variant={activeTab === "matches" ? "default" : "outline"}
-              onClick={() => setActiveTab("matches")}
+              variant={activeTab === "groups" ? "default" : "outline"}
+              onClick={() => setActiveTab("groups")}
               className="gap-2"
             >
               <Trophy className="w-4 h-4" />
-              Manage Matches
+              Manage Groups
             </Button>
           </div>
 
@@ -428,6 +492,9 @@ export default function AdminDashboard() {
                         <th className="px-4 py-3 text-center text-xs font-semibold text-muted-foreground uppercase">
                           W-L
                         </th>
+                        <th className="px-4 py-3 text-center text-xs font-semibold text-muted-foreground uppercase">
+                          Status
+                        </th>
                         <th className="px-4 py-3 text-right text-xs font-semibold text-muted-foreground uppercase">
                           Actions
                         </th>
@@ -458,9 +525,20 @@ export default function AdminDashboard() {
                             <span className="text-sm">{team.division?.name}</span>
                           </td>
                           <td className="px-4 py-3 text-center">
-                            <span className="text-green-400">{team.wins}</span>
+                            <span className="text-success">{team.wins}</span>
                             <span className="text-muted-foreground"> - </span>
-                            <span className="text-red-400">{team.losses}</span>
+                            <span className="text-destructive">{team.losses}</span>
+                          </td>
+                          <td className="px-4 py-3 text-center">
+                            {team.is_eliminated ? (
+                              <span className="px-2 py-1 rounded-full text-xs bg-destructive/20 text-destructive">
+                                Eliminated
+                              </span>
+                            ) : (
+                              <span className="px-2 py-1 rounded-full text-xs bg-success/20 text-success">
+                                Active
+                              </span>
+                            )}
                           </td>
                           <td className="px-4 py-3 text-right">
                             <Button
@@ -477,7 +555,6 @@ export default function AdminDashboard() {
                     </tbody>
                   </table>
                 </div>
-
                 {teams.length === 0 && (
                   <div className="p-8 text-center text-muted-foreground">
                     No teams added yet. Click "Add Team" to get started.
@@ -487,153 +564,277 @@ export default function AdminDashboard() {
             </div>
           )}
 
-          {/* Matches Tab */}
-          {activeTab === "matches" && (
+          {/* Groups Tab */}
+          {activeTab === "groups" && (
             <div className="space-y-6">
-              {/* Actions */}
-              <div className="flex flex-wrap gap-4">
-                <Dialog open={generateBracketOpen} onOpenChange={setGenerateBracketOpen}>
-                  <DialogTrigger asChild>
-                    <Button className="gap-2 bg-secondary hover:bg-secondary/90 text-secondary-foreground">
-                      <Zap className="w-4 h-4" />
-                      Generate Bracket
+              {/* Filters & Actions */}
+              <div className="glass-card p-4">
+                <div className="flex flex-col md:flex-row items-start md:items-center gap-4">
+                  <div className="flex flex-wrap items-center gap-4">
+                    <Select value={selectedCategory} onValueChange={setSelectedCategory}>
+                      <SelectTrigger className="w-40 bg-muted/50">
+                        <SelectValue placeholder="Category" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {categories.map((cat) => (
+                          <SelectItem key={cat.id} value={String(cat.id)}>
+                            {cat.name}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+
+                    <Select value={selectedDivision} onValueChange={setSelectedDivision}>
+                      <SelectTrigger className="w-40 bg-muted/50">
+                        <SelectValue placeholder="Division" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {divisions.map((div) => (
+                          <SelectItem key={div.id} value={String(div.id)}>
+                            {div.name}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  <div className="flex flex-wrap gap-2 ml-auto">
+                    <Dialog open={generateGroupsOpen} onOpenChange={setGenerateGroupsOpen}>
+                      <DialogTrigger asChild>
+                        <Button className="gap-2 bg-secondary hover:bg-secondary/90 text-secondary-foreground">
+                          <Zap className="w-4 h-4" />
+                          Generate Groups
+                        </Button>
+                      </DialogTrigger>
+                      <DialogContent className="glass-card border-border/50">
+                        <DialogHeader>
+                          <DialogTitle>Generate Tournament Groups</DialogTitle>
+                          <DialogDescription>
+                            This will divide teams into groups of 5 (or smaller if needed).
+                            Existing groups will be deleted.
+                          </DialogDescription>
+                        </DialogHeader>
+
+                        <div className="space-y-4 py-4">
+                          <div className="space-y-2">
+                            <Label>Category</Label>
+                            <Select value={groupCategory} onValueChange={setGroupCategory}>
+                              <SelectTrigger className="bg-muted/50">
+                                <SelectValue placeholder="Select category" />
+                              </SelectTrigger>
+                              <SelectContent>
+                                {categories.map((cat) => (
+                                  <SelectItem key={cat.id} value={String(cat.id)}>
+                                    {cat.name}
+                                  </SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
+                          </div>
+
+                          <div className="space-y-2">
+                            <Label>Division</Label>
+                            <Select value={groupDivision} onValueChange={setGroupDivision}>
+                              <SelectTrigger className="bg-muted/50">
+                                <SelectValue placeholder="Select division" />
+                              </SelectTrigger>
+                              <SelectContent>
+                                {divisions.map((div) => (
+                                  <SelectItem key={div.id} value={String(div.id)}>
+                                    {div.name}
+                                  </SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
+                          </div>
+                        </div>
+
+                        <DialogFooter>
+                          <Button variant="outline" onClick={() => setGenerateGroupsOpen(false)}>
+                            Cancel
+                          </Button>
+                          <Button onClick={handleGenerateGroups} disabled={generatingGroups}>
+                            {generatingGroups ? "Generating..." : "Generate"}
+                          </Button>
+                        </DialogFooter>
+                      </DialogContent>
+                    </Dialog>
+
+                    {groups.length > 0 && incompleteGroups.length === 0 && (
+                      <Button onClick={handleAdvanceStage} className="gap-2">
+                        <ArrowRight className="w-4 h-4" />
+                        Advance to Next Stage
+                      </Button>
+                    )}
+
+                    <Button
+                      variant="outline"
+                      onClick={() => {
+                        queryClient.invalidateQueries({ queryKey: ["groupsWithTeams"] });
+                        queryClient.invalidateQueries({ queryKey: ["matches"] });
+                      }}
+                      className="gap-2"
+                    >
+                      <RefreshCw className="w-4 h-4" />
+                      Refresh
                     </Button>
-                  </DialogTrigger>
-                  <DialogContent className="glass-card border-border/50">
-                    <DialogHeader>
-                      <DialogTitle>Generate Tournament Bracket</DialogTitle>
-                      <DialogDescription>
-                        This will create Round 1 matches for the selected category and division.
-                        Existing matches will be deleted.
-                      </DialogDescription>
-                    </DialogHeader>
-
-                    <div className="space-y-4 py-4">
-                      <div className="space-y-2">
-                        <Label>Category</Label>
-                        <Select value={bracketCategory} onValueChange={setBracketCategory}>
-                          <SelectTrigger className="bg-muted/50">
-                            <SelectValue placeholder="Select category" />
-                          </SelectTrigger>
-                          <SelectContent>
-                            {categories.map((cat) => (
-                              <SelectItem key={cat.id} value={String(cat.id)}>
-                                {cat.name}
-                              </SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
-                      </div>
-
-                      <div className="space-y-2">
-                        <Label>Division</Label>
-                        <Select value={bracketDivision} onValueChange={setBracketDivision}>
-                          <SelectTrigger className="bg-muted/50">
-                            <SelectValue placeholder="Select division" />
-                          </SelectTrigger>
-                          <SelectContent>
-                            {divisions.map((div) => (
-                              <SelectItem key={div.id} value={String(div.id)}>
-                                {div.name}
-                              </SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
-                      </div>
-                    </div>
-
-                    <DialogFooter>
-                      <Button variant="outline" onClick={() => setGenerateBracketOpen(false)}>
-                        Cancel
-                      </Button>
-                      <Button onClick={handleGenerateBracket} disabled={generatingBracket}>
-                        {generatingBracket ? "Generating..." : "Generate"}
-                      </Button>
-                    </DialogFooter>
-                  </DialogContent>
-                </Dialog>
-
-                <Button
-                  variant="outline"
-                  onClick={() => queryClient.invalidateQueries({ queryKey: ["matches"] })}
-                  className="gap-2"
-                >
-                  <RefreshCw className="w-4 h-4" />
-                  Refresh
-                </Button>
+                  </div>
+                </div>
               </div>
 
-              {/* Pending Matches */}
-              <div>
-                <h3 className="font-display font-bold text-lg mb-4 flex items-center gap-2">
-                  <Zap className="w-5 h-5 text-yellow-400" />
-                  Pending Matches ({pendingMatches.length})
-                </h3>
+              {/* Stage Info */}
+              {currentStage > 0 && (
+                <div className="flex items-center gap-2">
+                  <span className="text-sm text-muted-foreground">Current Stage:</span>
+                  <span className="px-3 py-1 rounded-full text-sm font-semibold bg-primary/20 text-primary">
+                    Stage {currentStage}
+                  </span>
+                  {incompleteGroups.length > 0 && (
+                    <span className="text-sm text-muted-foreground">
+                      • {incompleteGroups.length} group(s) need winners
+                    </span>
+                  )}
+                </div>
+              )}
 
-                {pendingMatches.length === 0 ? (
-                  <div className="glass-card p-8 text-center text-muted-foreground">
-                    No pending matches. Generate a bracket to create matches.
-                  </div>
-                ) : (
-                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                    {pendingMatches.map((match) => (
-                      <div key={match.id} className="glass-card p-4">
-                        <div className="text-xs text-muted-foreground mb-2">
-                          {match.round_name} • {match.category?.name} • {match.division?.name}
-                        </div>
-
-                        <div className="space-y-2 mb-4">
-                          <div className="flex items-center gap-2 p-2 rounded bg-muted/30">
-                            <div className="w-8 h-8 rounded bg-primary/20 flex items-center justify-center text-sm font-bold text-primary">
-                              {match.team1?.name?.charAt(0) || "?"}
-                            </div>
-                            <span className="font-medium flex-1 truncate">
-                              {match.team1?.name || "TBD"}
-                            </span>
-                            {match.team1 && (
-                              <Button
-                                size="sm"
-                                variant="outline"
-                                onClick={() => handleSetWinner(match.id, match.team1!.id)}
-                                className="text-xs"
-                              >
-                                Win
-                              </Button>
-                            )}
-                          </div>
-
-                          <div className="text-center text-xs text-muted-foreground">VS</div>
-
-                          <div className="flex items-center gap-2 p-2 rounded bg-muted/30">
-                            <div className="w-8 h-8 rounded bg-secondary/20 flex items-center justify-center text-sm font-bold text-secondary">
-                              {match.team2?.name?.charAt(0) || "?"}
-                            </div>
-                            <span className="font-medium flex-1 truncate">
-                              {match.team2?.name || "TBD"}
-                            </span>
-                            {match.team2 && (
-                              <Button
-                                size="sm"
-                                variant="outline"
-                                onClick={() => handleSetWinner(match.id, match.team2!.id)}
-                                className="text-xs"
-                              >
-                                Win
-                              </Button>
-                            )}
-                          </div>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </div>
+              {/* Groups Grid */}
+              {groups.length === 0 ? (
+                <div className="glass-card p-8 text-center text-muted-foreground">
+                  No groups created yet. Click "Generate Groups" to start the tournament.
+                </div>
+              ) : (
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                  {groups.map((group) => (
+                    <GroupManageCard
+                      key={group.id}
+                      group={group}
+                      onSetWinner={handleSetGroupWinner}
+                      onSetMatchWinner={handleSetMatchWinner}
+                      matches={matches.filter(m => m.group_id === group.id)}
+                    />
+                  ))}
+                </div>
+              )}
             </div>
           )}
         </div>
       </main>
 
       <Footer />
+    </div>
+  );
+}
+
+interface GroupManageCardProps {
+  group: GroupWithTeams;
+  onSetWinner: (groupId: string, winnerId: string) => void;
+  onSetMatchWinner: (matchId: string, winnerId: string) => void;
+  matches: any[];
+}
+
+function GroupManageCard({ group, onSetWinner, onSetMatchWinner, matches }: GroupManageCardProps) {
+  const pendingMatches = matches.filter(m => m.status === "pending");
+
+  return (
+    <div className="glass-card overflow-hidden">
+      {/* Header */}
+      <div className={cn(
+        "p-4 border-b border-border/30",
+        group.is_completed ? "bg-success/10" : "bg-primary/10"
+      )}>
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <div className="w-8 h-8 rounded-lg bg-primary/20 flex items-center justify-center text-sm font-bold text-primary">
+              {group.group_number}
+            </div>
+            <h3 className="font-display font-semibold">{group.group_name}</h3>
+          </div>
+          {group.is_completed && (
+            <CheckCircle className="w-5 h-5 text-success" />
+          )}
+        </div>
+      </div>
+
+      {/* Teams */}
+      <div className="p-4 space-y-2">
+        {group.group_teams.map((gt) => (
+          <div
+            key={gt.id}
+            className={cn(
+              "flex items-center gap-3 p-2 rounded-lg",
+              gt.is_winner
+                ? "bg-success/10 border border-success/30"
+                : "bg-muted/30"
+            )}
+          >
+            <div className="w-8 h-8 rounded-lg bg-primary/20 flex items-center justify-center text-sm font-bold text-primary shrink-0">
+              {gt.team?.name?.charAt(0) || "?"}
+            </div>
+            <span className="font-medium flex-1 truncate text-sm">
+              {gt.team?.name || "Unknown"}
+            </span>
+            {gt.is_winner && <Crown className="w-4 h-4 text-warning shrink-0" />}
+            {!group.is_completed && (
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={() => onSetWinner(group.id, gt.team_id)}
+                className="text-xs shrink-0"
+              >
+                <Crown className="w-3 h-3 mr-1" />
+                Win
+              </Button>
+            )}
+          </div>
+        ))}
+      </div>
+
+      {/* Pending Matches */}
+      {pendingMatches.length > 0 && (
+        <div className="p-4 border-t border-border/30">
+          <p className="text-xs text-muted-foreground uppercase mb-2">Pending Matches</p>
+          {pendingMatches.map((match) => (
+            <div key={match.id} className="p-2 rounded-lg bg-muted/30 mb-2">
+              <div className="flex items-center gap-2 text-sm mb-2">
+                <span className="flex-1 truncate">{match.team1?.name}</span>
+                <Swords className="w-3 h-3 text-muted-foreground" />
+                <span className="flex-1 truncate text-right">{match.team2?.name}</span>
+              </div>
+              <div className="flex gap-2">
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={() => onSetMatchWinner(match.id, match.team1_id)}
+                  className="flex-1 text-xs"
+                >
+                  {match.team1?.name?.split(" ")[0]} Wins
+                </Button>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={() => onSetMatchWinner(match.id, match.team2_id)}
+                  className="flex-1 text-xs"
+                >
+                  {match.team2?.name?.split(" ")[0]} Wins
+                </Button>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* Winner Display */}
+      {group.is_completed && group.winner && (
+        <div className="p-4 bg-gradient-to-r from-warning/10 to-transparent border-t border-warning/30">
+          <div className="flex items-center gap-3">
+            <Crown className="w-5 h-5 text-warning" />
+            <div>
+              <p className="text-xs text-warning/80">Group Winner</p>
+              <p className="font-display font-bold text-warning">{group.winner.name}</p>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
