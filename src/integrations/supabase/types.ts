@@ -53,16 +53,128 @@ export type Database = {
         }
         Relationships: []
       }
+      group_teams: {
+        Row: {
+          created_at: string
+          group_id: string
+          id: string
+          is_winner: boolean | null
+          losses: number | null
+          matches_played: number | null
+          team_id: string
+          wins: number | null
+        }
+        Insert: {
+          created_at?: string
+          group_id: string
+          id?: string
+          is_winner?: boolean | null
+          losses?: number | null
+          matches_played?: number | null
+          team_id: string
+          wins?: number | null
+        }
+        Update: {
+          created_at?: string
+          group_id?: string
+          id?: string
+          is_winner?: boolean | null
+          losses?: number | null
+          matches_played?: number | null
+          team_id?: string
+          wins?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "group_teams_group_id_fkey"
+            columns: ["group_id"]
+            isOneToOne: false
+            referencedRelation: "groups"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "group_teams_team_id_fkey"
+            columns: ["team_id"]
+            isOneToOne: false
+            referencedRelation: "teams"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      groups: {
+        Row: {
+          category_id: number | null
+          created_at: string
+          division_id: number | null
+          group_name: string | null
+          group_number: number
+          id: string
+          is_completed: boolean | null
+          stage_number: number
+          updated_at: string
+          winner_team_id: string | null
+        }
+        Insert: {
+          category_id?: number | null
+          created_at?: string
+          division_id?: number | null
+          group_name?: string | null
+          group_number: number
+          id?: string
+          is_completed?: boolean | null
+          stage_number?: number
+          updated_at?: string
+          winner_team_id?: string | null
+        }
+        Update: {
+          category_id?: number | null
+          created_at?: string
+          division_id?: number | null
+          group_name?: string | null
+          group_number?: number
+          id?: string
+          is_completed?: boolean | null
+          stage_number?: number
+          updated_at?: string
+          winner_team_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "groups_category_id_fkey"
+            columns: ["category_id"]
+            isOneToOne: false
+            referencedRelation: "categories"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "groups_division_id_fkey"
+            columns: ["division_id"]
+            isOneToOne: false
+            referencedRelation: "divisions"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "groups_winner_team_id_fkey"
+            columns: ["winner_team_id"]
+            isOneToOne: false
+            referencedRelation: "teams"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       matches: {
         Row: {
           category_id: number | null
           created_at: string
           division_id: number | null
+          group_id: string | null
+          group_number: number | null
           id: string
           match_date: string | null
           match_number: number
           round_name: string | null
           round_number: number
+          stage_number: number | null
           status: string | null
           team1_id: string | null
           team2_id: string | null
@@ -73,11 +185,14 @@ export type Database = {
           category_id?: number | null
           created_at?: string
           division_id?: number | null
+          group_id?: string | null
+          group_number?: number | null
           id?: string
           match_date?: string | null
           match_number: number
           round_name?: string | null
           round_number: number
+          stage_number?: number | null
           status?: string | null
           team1_id?: string | null
           team2_id?: string | null
@@ -88,11 +203,14 @@ export type Database = {
           category_id?: number | null
           created_at?: string
           division_id?: number | null
+          group_id?: string | null
+          group_number?: number | null
           id?: string
           match_date?: string | null
           match_number?: number
           round_name?: string | null
           round_number?: number
+          stage_number?: number | null
           status?: string | null
           team1_id?: string | null
           team2_id?: string | null

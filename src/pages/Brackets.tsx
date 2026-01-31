@@ -2,10 +2,10 @@ import { useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import { Header } from "@/components/Header";
 import { Footer } from "@/components/Footer";
-import { BracketView } from "@/components/BracketView";
-import { useCategories, useDivisions, useMatches, useRealtimeMatches } from "@/hooks/useTournamentData";
+import { GroupStageView } from "@/components/GroupStageView";
+import { useCategories, useDivisions, useRealtimeMatches } from "@/hooks/useTournamentData";
+import { useRealtimeGroups } from "@/hooks/useGroupData";
 import { Bot, Trophy, Filter } from "lucide-react";
-import { Button } from "@/components/ui/button";
 import {
   Select,
   SelectContent,
@@ -23,12 +23,12 @@ export default function Brackets() {
   const [selectedCategory, setSelectedCategory] = useState(initialCategory);
   const [selectedDivision, setSelectedDivision] = useState(initialDivision);
 
-  const { data: categories = [] } = useCategories();
-  const { data: divisions = [] } = useDivisions();
-  const { data: matches = [], isLoading } = useMatches(selectedCategory, selectedDivision);
+  const { data: categories = [], isLoading: categoriesLoading } = useCategories();
+  const { data: divisions = [], isLoading: divisionsLoading } = useDivisions();
 
   // Enable realtime updates
   useRealtimeMatches();
+  useRealtimeGroups();
 
   const handleCategoryChange = (value: string) => {
     setSelectedCategory(Number(value));
@@ -42,6 +42,7 @@ export default function Brackets() {
 
   const currentCategory = categories.find((c) => c.id === selectedCategory);
   const currentDivision = divisions.find((d) => d.id === selectedDivision);
+  const isLoading = categoriesLoading || divisionsLoading;
 
   return (
     <div className="min-h-screen flex flex-col">
@@ -60,7 +61,7 @@ export default function Brackets() {
                   Tournament Brackets
                 </h1>
                 <p className="text-muted-foreground">
-                  Live elimination brackets with real-time updates
+                  Live group stages with real-time updates
                 </p>
               </div>
             </div>
@@ -139,14 +140,14 @@ export default function Brackets() {
             </div>
           )}
 
-          {/* Bracket View */}
+          {/* Group Stage View */}
           {isLoading ? (
             <div className="glass-card p-12 text-center">
               <Bot className="w-16 h-16 text-primary mx-auto animate-pulse mb-4" />
-              <p className="text-lg text-muted-foreground">Loading bracket...</p>
+              <p className="text-lg text-muted-foreground">Loading groups...</p>
             </div>
           ) : (
-            <BracketView matches={matches} categoryId={selectedCategory} />
+            <GroupStageView categoryId={selectedCategory} divisionId={selectedDivision} />
           )}
         </div>
       </main>

@@ -47,6 +47,9 @@ export interface Match {
   winner_id: string | null;
   status: string;
   match_date: string | null;
+  group_id: string | null;
+  group_number: number | null;
+  stage_number: number | null;
   created_at: string;
   updated_at: string;
   team1?: Team;
