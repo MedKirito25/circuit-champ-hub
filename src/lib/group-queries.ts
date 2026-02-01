@@ -275,7 +275,8 @@ export async function advanceToNextStage(categoryId: number, divisionId: number)
 
   // Create next stage groups
   const nextStage = currentStage + 1;
-  const groupSize = 5;
+  // Category 1 (Suiveur) uses groups of 2, Category 2 (Tout Terrain) uses groups of 5
+  const groupSize = categoryId === 1 ? 2 : 5;
   const numGroups = Math.ceil(winners.length / groupSize);
 
   // Shuffle winners
