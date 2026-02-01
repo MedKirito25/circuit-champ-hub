@@ -2,7 +2,7 @@ import { useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import { Header } from "@/components/Header";
 import { Footer } from "@/components/Footer";
-import { GroupStageView } from "@/components/GroupStageView";
+import { TournamentBracketView } from "@/components/TournamentBracketView";
 import { useCategories, useDivisions, useRealtimeMatches } from "@/hooks/useTournamentData";
 import { useRealtimeGroups } from "@/hooks/useGroupData";
 import { Bot, Trophy, Filter } from "lucide-react";
@@ -140,14 +140,14 @@ export default function Brackets() {
             </div>
           )}
 
-          {/* Group Stage View */}
+          {/* Tournament Bracket View */}
           {isLoading ? (
             <div className="glass-card p-12 text-center">
               <Bot className="w-16 h-16 text-primary mx-auto animate-pulse mb-4" />
-              <p className="text-lg text-muted-foreground">Loading groups...</p>
+              <p className="text-lg text-muted-foreground">Loading bracket...</p>
             </div>
           ) : (
-            <GroupStageView categoryId={selectedCategory} divisionId={selectedDivision} />
+            <TournamentBracketView categoryId={selectedCategory} divisionId={selectedDivision} />
           )}
         </div>
       </main>
