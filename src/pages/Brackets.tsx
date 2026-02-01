@@ -2,7 +2,7 @@ import { useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import { Header } from "@/components/Header";
 import { Footer } from "@/components/Footer";
-import { GroupStageView } from "@/components/GroupStageView";
+import { TournamentBracketView } from "@/components/TournamentBracketView";
 import { useCategories, useDivisions, useRealtimeMatches } from "@/hooks/useTournamentData";
 import { useRealtimeGroups } from "@/hooks/useGroupData";
 import { Bot, Trophy, Filter } from "lucide-react";
