@@ -1,10 +1,11 @@
-import { useEffect, useState } from "react";
+import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { Header } from "@/components/Header";
 import { Footer } from "@/components/Footer";
 import { useTeams, useMatches, useCategories, useDivisions } from "@/hooks/useTournamentData";
 import { useGroupsWithTeams } from "@/hooks/useGroupData";
+import { useAdminRole } from "@/hooks/useAdminRole";
 import {
   createTeam,
   deleteTeam,
@@ -32,6 +33,7 @@ import {
   Crown,
   ArrowRight,
   Layers,
+  ShieldAlert,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -57,12 +59,13 @@ import { useQueryClient } from "@tanstack/react-query";
 import { cn } from "@/lib/utils";
 
 export default function AdminDashboard() {
-  const [user, setUser] = useState<any>(null);
-  const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState<"teams" | "groups">("teams");
   const navigate = useNavigate();
   const { toast } = useToast();
   const queryClient = useQueryClient();
+
+  // Use admin role hook for proper server-side authorization check
+  const { user, isAdmin, loading, error: adminError } = useAdminRole();
 
   // Add Team Modal State
   const [addTeamOpen, setAddTeamOpen] = useState(false);
@@ -91,29 +94,12 @@ export default function AdminDashboard() {
     Number(selectedDivision)
   );
 
+  // Redirect if not authenticated
   useEffect(() => {
-    const checkAuth = async () => {
-      const { data: { session } } = await supabase.auth.getSession();
-      if (!session) {
-        navigate("/admin");
-        return;
-      }
-      setUser(session.user);
-      setLoading(false);
-    };
-
-    checkAuth();
-
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
-      if (event === "SIGNED_OUT" || !session) {
-        navigate("/admin");
-      } else {
-        setUser(session.user);
-      }
-    });
-
-    return () => subscription.unsubscribe();
-  }, [navigate]);
+    if (!loading && !user) {
+      navigate("/admin");
+    }
+  }, [loading, user, navigate]);
 
   const handleLogout = async () => {
     await supabase.auth.signOut();
@@ -278,6 +264,36 @@ export default function AdminDashboard() {
     return (
       <div className="min-h-screen flex items-center justify-center">
         <Bot className="w-12 h-12 text-primary animate-pulse" />
+      </div>
+    );
+  }
+
+  // Show access denied if user is authenticated but not an admin
+  if (user && !isAdmin) {
+    return (
+      <div className="min-h-screen flex flex-col">
+        <Header />
+        <main className="flex-1 pt-24 pb-12 flex items-center justify-center">
+          <div className="text-center max-w-md px-4">
+            <div className="w-20 h-20 mx-auto rounded-2xl bg-destructive/20 flex items-center justify-center border border-destructive/30 mb-6">
+              <ShieldAlert className="w-10 h-10 text-destructive" />
+            </div>
+            <h1 className="font-display text-2xl font-bold mb-4">Access Denied</h1>
+            <p className="text-muted-foreground mb-6">
+              You don't have admin privileges to access this dashboard. Please contact the tournament administrator to request access.
+            </p>
+            <div className="flex flex-col gap-3">
+              <Button onClick={() => navigate("/")} variant="outline">
+                Return to Home
+              </Button>
+              <Button onClick={handleLogout} variant="ghost" className="text-muted-foreground">
+                <LogOut className="w-4 h-4 mr-2" />
+                Sign Out
+              </Button>
+            </div>
+          </div>
+        </main>
+        <Footer />
       </div>
     );
   }
