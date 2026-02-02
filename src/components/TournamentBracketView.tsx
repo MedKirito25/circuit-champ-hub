@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { GroupWithTeams, getGroupsWithTeams } from "@/lib/group-queries";
 import { Trophy, Crown, CheckCircle } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -11,6 +11,7 @@ interface TournamentBracketViewProps {
 export function TournamentBracketView({ categoryId, divisionId }: TournamentBracketViewProps) {
   const [groups, setGroups] = useState<GroupWithTeams[]>([]);
   const [loading, setLoading] = useState(true);
+  const containerRef = useRef<HTMLDivElement>(null);
 
   const isSuiveur = categoryId === 1;
 
@@ -76,84 +77,128 @@ export function TournamentBracketView({ categoryId, divisionId }: TournamentBrac
   const finalGroups = groupsByStage[finalStage] || [];
   const champion = finalGroups.length === 1 && finalGroups[0].is_completed ? finalGroups[0].winner : null;
 
+  // Card dimensions for layout calculations
+  const CARD_HEIGHT = 120;
+  const CARD_WIDTH = 220;
+  const CONNECTOR_WIDTH = 48;
+  const VERTICAL_GAP = 16;
+
+  // Calculate height needed for the first stage (most groups)
+  const maxGroupsInStage = Math.max(...stages.map(s => groupsByStage[s]?.length || 0));
+  const totalHeight = maxGroupsInStage * CARD_HEIGHT + (maxGroupsInStage - 1) * VERTICAL_GAP;
+
   return (
-    <div className="space-y-8">
+    <div className="space-y-6">
       {/* Champion Banner */}
       {champion && (
         <div className="glass-card p-6 border-2 border-yellow-500/50 bg-gradient-to-r from-yellow-500/10 via-yellow-500/5 to-transparent">
           <div className="flex items-center justify-center gap-4">
-            <Crown className="w-12 h-12 text-yellow-500 animate-pulse" />
+            <Crown className="w-10 h-10 text-yellow-500 animate-pulse" />
             <div className="text-center">
               <p className="text-sm text-yellow-500/80 font-medium uppercase tracking-wider">Tournament Champion</p>
-              <h2 className="font-display text-3xl font-bold text-yellow-500">
+              <h2 className="font-display text-2xl font-bold text-yellow-500">
                 {champion.name}
               </h2>
             </div>
-            <Crown className="w-12 h-12 text-yellow-500 animate-pulse" />
+            <Crown className="w-10 h-10 text-yellow-500 animate-pulse" />
           </div>
         </div>
       )}
 
       {/* Bracket Visualization */}
-      <div className="glass-card p-6 overflow-x-auto">
-        <div className="min-w-[800px]">
-          <div className="flex items-stretch gap-0">
-            {stages.map((stage, stageIndex) => {
-              const stageGroups = groupsByStage[stage];
-              const isLastStage = stageIndex === stages.length - 1;
-              const nextStageGroups = !isLastStage ? groupsByStage[stages[stageIndex + 1]] : [];
-              
-              return (
-                <div key={stage} className="flex items-stretch">
-                  {/* Stage Column */}
-                  <div className="flex flex-col justify-around min-w-[200px]">
-                    {/* Stage Header */}
-                    <div className="text-center mb-4">
-                      <span
-                        className={cn(
-                          "inline-block px-3 py-1 rounded-full text-xs font-semibold",
-                          isSuiveur ? "bg-primary/20 text-primary" : "bg-secondary/20 text-secondary"
-                        )}
-                      >
-                        {isLastStage && stageGroups.length === 1 ? "Final" : `Stage ${stage}`}
-                      </span>
-                    </div>
+      <div className="glass-card p-6 overflow-x-auto" ref={containerRef}>
+        <div 
+          className="relative flex items-center"
+          style={{ 
+            minWidth: stages.length * (CARD_WIDTH + CONNECTOR_WIDTH) + 40,
+            minHeight: totalHeight + 80
+          }}
+        >
+          {stages.map((stage, stageIndex) => {
+            const stageGroups = groupsByStage[stage];
+            const isLastStage = stageIndex === stages.length - 1;
+            const isFinal = isLastStage && stageGroups.length === 1;
+            
+            // Calculate vertical spacing for this stage
+            const groupCount = stageGroups.length;
+            const stageHeight = groupCount * CARD_HEIGHT + (groupCount - 1) * VERTICAL_GAP;
+            const stageOffset = (totalHeight - stageHeight) / 2;
 
-                    {/* Groups */}
-                    <div className="flex flex-col justify-around flex-1 gap-4">
-                      {stageGroups.map((group) => (
-                        <BracketGroupCard
-                          key={group.id}
-                          group={group}
-                          isSuiveur={isSuiveur}
-                          isFinal={isLastStage && stageGroups.length === 1}
-                        />
-                      ))}
-                    </div>
+            return (
+              <div 
+                key={stage} 
+                className="flex items-start"
+                style={{ 
+                  marginLeft: stageIndex === 0 ? 0 : 0 
+                }}
+              >
+                {/* Stage Column */}
+                <div 
+                  className="flex flex-col relative"
+                  style={{ 
+                    width: CARD_WIDTH,
+                    paddingTop: stageOffset + 40
+                  }}
+                >
+                  {/* Stage Header */}
+                  <div 
+                    className="absolute top-0 left-0 right-0 text-center"
+                    style={{ width: CARD_WIDTH }}
+                  >
+                    <span
+                      className={cn(
+                        "inline-block px-4 py-1.5 rounded-full text-xs font-bold uppercase tracking-wider",
+                        isFinal 
+                          ? "bg-yellow-500/20 text-yellow-500 border border-yellow-500/30"
+                          : isSuiveur 
+                            ? "bg-primary/20 text-primary border border-primary/30" 
+                            : "bg-secondary/20 text-secondary border border-secondary/30"
+                      )}
+                    >
+                      {isFinal ? "🏆 Final" : `Stage ${stage}`}
+                    </span>
                   </div>
 
-                  {/* Connector Lines */}
-                  {!isLastStage && stageGroups.length > 0 && (
-                    <div className="relative w-16 flex items-center justify-center">
-                      <BracketConnectors
-                        sourceCount={stageGroups.length}
-                        targetCount={nextStageGroups.length}
+                  {/* Groups */}
+                  <div 
+                    className="flex flex-col"
+                    style={{ gap: VERTICAL_GAP }}
+                  >
+                    {stageGroups.map((group) => (
+                      <BracketGroupCard
+                        key={group.id}
+                        group={group}
                         isSuiveur={isSuiveur}
+                        isFinal={isFinal}
+                        height={CARD_HEIGHT}
                       />
-                    </div>
-                  )}
+                    ))}
+                  </div>
                 </div>
-              );
-            })}
-          </div>
+
+                {/* Connector Lines */}
+                {!isLastStage && stageGroups.length > 0 && (
+                  <BracketConnectors
+                    sourceCount={stageGroups.length}
+                    targetCount={(groupsByStage[stages[stageIndex + 1]] || []).length}
+                    cardHeight={CARD_HEIGHT}
+                    verticalGap={VERTICAL_GAP}
+                    totalHeight={totalHeight}
+                    width={CONNECTOR_WIDTH}
+                    isSuiveur={isSuiveur}
+                  />
+                )}
+              </div>
+            );
+          })}
         </div>
       </div>
 
       {/* Stage Legend */}
-      <div className="flex items-center justify-center gap-6 text-sm text-muted-foreground">
+      <div className="flex flex-wrap items-center justify-center gap-4 sm:gap-6 text-sm text-muted-foreground">
         <div className="flex items-center gap-2">
           <div className={cn("w-3 h-3 rounded-full", isSuiveur ? "bg-primary" : "bg-secondary")} />
-          <span>Active Groups</span>
+          <span>Active</span>
         </div>
         <div className="flex items-center gap-2">
           <div className="w-3 h-3 rounded-full bg-green-500" />
@@ -172,57 +217,61 @@ interface BracketGroupCardProps {
   group: GroupWithTeams;
   isSuiveur: boolean;
   isFinal?: boolean;
+  height: number;
 }
 
-function BracketGroupCard({ group, isSuiveur, isFinal }: BracketGroupCardProps) {
+function BracketGroupCard({ group, isSuiveur, isFinal, height }: BracketGroupCardProps) {
   return (
     <div
       className={cn(
-        "rounded-lg border-2 overflow-hidden transition-all",
+        "rounded-lg border-2 overflow-hidden transition-all shadow-lg",
         group.is_completed
-          ? "border-green-500/50 bg-green-500/5"
-          : isSuiveur
-            ? "border-primary/30 bg-primary/5"
-            : "border-secondary/30 bg-secondary/5",
-        isFinal && "border-yellow-500/50 bg-yellow-500/5"
+          ? "border-green-500/50 bg-gradient-to-br from-green-500/10 to-green-500/5"
+          : isFinal
+            ? "border-yellow-500/50 bg-gradient-to-br from-yellow-500/10 to-yellow-500/5"
+            : isSuiveur
+              ? "border-primary/40 bg-gradient-to-br from-primary/10 to-primary/5"
+              : "border-secondary/40 bg-gradient-to-br from-secondary/10 to-secondary/5"
       )}
+      style={{ height, minHeight: height }}
     >
       {/* Group Header */}
       <div
         className={cn(
-          "px-3 py-2 border-b flex items-center justify-between",
+          "px-3 py-1.5 border-b flex items-center justify-between",
           group.is_completed
-            ? "border-green-500/30 bg-green-500/10"
-            : isSuiveur
-              ? "border-primary/20 bg-primary/10"
-              : "border-secondary/20 bg-secondary/10",
-          isFinal && "border-yellow-500/30 bg-yellow-500/10"
+            ? "border-green-500/30 bg-green-500/20"
+            : isFinal
+              ? "border-yellow-500/30 bg-yellow-500/20"
+              : isSuiveur
+                ? "border-primary/30 bg-primary/20"
+                : "border-secondary/30 bg-secondary/20"
         )}
       >
-        <span className="font-display font-semibold text-sm">
-          {isFinal ? "🏆 Final" : group.group_name}
+        <span className="font-display font-semibold text-xs">
+          {isFinal ? "Championship" : group.group_name}
         </span>
         {group.is_completed && (
-          <CheckCircle className="w-4 h-4 text-green-400" />
+          <CheckCircle className="w-3.5 h-3.5 text-green-400" />
         )}
       </div>
 
       {/* Teams */}
-      <div className="p-2 space-y-1">
-        {group.group_teams.map((gt) => (
+      <div className="p-2 space-y-1 flex-1">
+        {group.group_teams.slice(0, 3).map((gt) => (
           <div
             key={gt.id}
             className={cn(
-              "flex items-center gap-2 px-2 py-1.5 rounded text-sm transition-colors",
+              "flex items-center gap-2 px-2 py-1 rounded text-xs transition-colors",
               gt.is_winner
-                ? "bg-yellow-500/20 border border-yellow-500/30"
-                : "bg-muted/30"
+                ? "bg-yellow-500/20 border border-yellow-500/40"
+                : "bg-background/30 hover:bg-background/50"
             )}
           >
             <div
               className={cn(
-                "w-5 h-5 rounded flex items-center justify-center text-xs font-bold shrink-0",
-                isSuiveur ? "bg-primary/20 text-primary" : "bg-secondary/20 text-secondary"
+                "w-4 h-4 rounded flex items-center justify-center text-[10px] font-bold shrink-0",
+                isSuiveur ? "bg-primary/30 text-primary" : "bg-secondary/30 text-secondary"
               )}
             >
               {gt.team?.logo_url ? (
@@ -235,7 +284,7 @@ function BracketGroupCard({ group, isSuiveur, isFinal }: BracketGroupCardProps) 
                 gt.team?.name?.charAt(0) || "?"
               )}
             </div>
-            <span className="flex-1 truncate font-medium text-xs">
+            <span className="flex-1 truncate font-medium">
               {gt.team?.name || "TBD"}
             </span>
             {gt.is_winner && (
@@ -243,14 +292,19 @@ function BracketGroupCard({ group, isSuiveur, isFinal }: BracketGroupCardProps) 
             )}
           </div>
         ))}
+        {group.group_teams.length > 3 && (
+          <div className="text-[10px] text-muted-foreground text-center">
+            +{group.group_teams.length - 3} more
+          </div>
+        )}
       </div>
 
       {/* Winner indicator */}
       {group.is_completed && group.winner && (
-        <div className="px-2 pb-2">
-          <div className="flex items-center gap-1 text-xs text-yellow-500">
+        <div className="px-2 pb-1.5 border-t border-green-500/20">
+          <div className="flex items-center gap-1 text-[10px] text-yellow-500">
             <Crown className="w-3 h-3" />
-            <span className="font-semibold truncate">{group.winner.name}</span>
+            <span className="font-bold truncate">{group.winner.name}</span>
           </div>
         </div>
       )}
@@ -261,48 +315,82 @@ function BracketGroupCard({ group, isSuiveur, isFinal }: BracketGroupCardProps) 
 interface BracketConnectorsProps {
   sourceCount: number;
   targetCount: number;
+  cardHeight: number;
+  verticalGap: number;
+  totalHeight: number;
+  width: number;
   isSuiveur: boolean;
 }
 
-function BracketConnectors({ sourceCount, targetCount, isSuiveur }: BracketConnectorsProps) {
-  // Calculate SVG dimensions
-  const sourceSpacing = 100;
-  const targetSpacing = sourceCount > 1 ? (sourceCount * sourceSpacing) / Math.max(targetCount, 1) : sourceSpacing;
-  const height = Math.max(sourceCount, 1) * sourceSpacing;
-  const width = 64;
+function BracketConnectors({ 
+  sourceCount, 
+  targetCount, 
+  cardHeight, 
+  verticalGap, 
+  totalHeight, 
+  width,
+  isSuiveur 
+}: BracketConnectorsProps) {
+  if (sourceCount === 0 || targetCount === 0) return null;
 
-  // Generate path data for each connection
-  const paths: string[] = [];
+  // Calculate Y positions for source groups
+  const sourceStageHeight = sourceCount * cardHeight + (sourceCount - 1) * verticalGap;
+  const sourceOffset = (totalHeight - sourceStageHeight) / 2;
+  
+  // Calculate Y positions for target groups
+  const targetStageHeight = targetCount * cardHeight + (targetCount - 1) * verticalGap;
+  const targetOffset = (totalHeight - targetStageHeight) / 2;
+
+  const paths: { d: string; key: string }[] = [];
+  
+  // Map source to target groups (typically 2:1 ratio in tournament brackets)
+  const sourcesPerTarget = Math.ceil(sourceCount / targetCount);
   
   for (let i = 0; i < sourceCount; i++) {
-    // Calculate which target this source connects to
-    const targetIndex = Math.min(Math.floor(i / Math.ceil(sourceCount / Math.max(targetCount, 1))), Math.max(targetCount - 1, 0));
+    const targetIndex = Math.floor(i / sourcesPerTarget);
+    const clampedTargetIndex = Math.min(targetIndex, targetCount - 1);
     
-    const sourceY = (i + 0.5) * sourceSpacing;
-    const targetY = targetCount > 0 
-      ? (targetIndex + 0.5) * targetSpacing + ((sourceCount - targetCount) * sourceSpacing) / 2 / Math.max(targetCount, 1)
-      : height / 2;
+    // Source Y: center of the source card
+    const sourceY = sourceOffset + i * (cardHeight + verticalGap) + cardHeight / 2;
     
-    // Create a curved path
+    // Target Y: center of the target card
+    const targetY = targetOffset + clampedTargetIndex * (cardHeight + verticalGap) + cardHeight / 2;
+    
+    // Create curved bezier path
     const midX = width / 2;
-    paths.push(`M 0 ${sourceY} C ${midX} ${sourceY}, ${midX} ${targetY}, ${width} ${targetY}`);
+    paths.push({
+      d: `M 0 ${sourceY} C ${midX} ${sourceY}, ${midX} ${targetY}, ${width} ${targetY}`,
+      key: `${i}-${clampedTargetIndex}`
+    });
   }
+
+  const strokeColor = isSuiveur ? "hsl(var(--primary))" : "hsl(var(--secondary))";
 
   return (
     <svg
       width={width}
-      height={height}
-      className="block"
-      style={{ minHeight: height }}
+      height={totalHeight}
+      className="flex-shrink-0"
+      style={{ 
+        marginTop: 40,
+        overflow: "visible" 
+      }}
     >
-      {paths.map((d, idx) => (
+      <defs>
+        <linearGradient id={`connector-gradient-${isSuiveur ? 'primary' : 'secondary'}`} x1="0%" y1="0%" x2="100%" y2="0%">
+          <stop offset="0%" stopColor={strokeColor} stopOpacity={0.5} />
+          <stop offset="50%" stopColor={strokeColor} stopOpacity={0.8} />
+          <stop offset="100%" stopColor={strokeColor} stopOpacity={0.5} />
+        </linearGradient>
+      </defs>
+      {paths.map(({ d, key }) => (
         <path
-          key={idx}
+          key={key}
           d={d}
           fill="none"
-          stroke={isSuiveur ? "hsl(var(--primary))" : "hsl(var(--secondary))"}
+          stroke={`url(#connector-gradient-${isSuiveur ? 'primary' : 'secondary'})`}
           strokeWidth={2}
-          opacity={0.5}
+          strokeLinecap="round"
         />
       ))}
     </svg>
