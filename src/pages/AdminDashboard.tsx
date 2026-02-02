@@ -268,6 +268,36 @@ export default function AdminDashboard() {
     );
   }
 
+  // Show access denied if user is authenticated but not an admin
+  if (user && !isAdmin) {
+    return (
+      <div className="min-h-screen flex flex-col">
+        <Header />
+        <main className="flex-1 pt-24 pb-12 flex items-center justify-center">
+          <div className="text-center max-w-md px-4">
+            <div className="w-20 h-20 mx-auto rounded-2xl bg-destructive/20 flex items-center justify-center border border-destructive/30 mb-6">
+              <ShieldAlert className="w-10 h-10 text-destructive" />
+            </div>
+            <h1 className="font-display text-2xl font-bold mb-4">Access Denied</h1>
+            <p className="text-muted-foreground mb-6">
+              You don't have admin privileges to access this dashboard. Please contact the tournament administrator to request access.
+            </p>
+            <div className="flex flex-col gap-3">
+              <Button onClick={() => navigate("/")} variant="outline">
+                Return to Home
+              </Button>
+              <Button onClick={handleLogout} variant="ghost" className="text-muted-foreground">
+                <LogOut className="w-4 h-4 mr-2" />
+                Sign Out
+              </Button>
+            </div>
+          </div>
+        </main>
+        <Footer />
+      </div>
+    );
+  }
+
   const pendingMatches = matches.filter((m) => m.status === "pending");
   const incompleteGroups = groups.filter((g) => !g.is_completed);
 
