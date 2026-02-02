@@ -14,7 +14,6 @@ export default function AdminLogin() {
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
-  const [isSignUp, setIsSignUp] = useState(false);
   const navigate = useNavigate();
   const { toast } = useToast();
 
@@ -24,36 +23,19 @@ export default function AdminLogin() {
     setLoading(true);
 
     try {
-      if (isSignUp) {
-        const { error } = await supabase.auth.signUp({
-          email,
-          password,
-          options: {
-            emailRedirectTo: window.location.origin,
-          },
-        });
+      const { error } = await supabase.auth.signInWithPassword({
+        email,
+        password,
+      });
 
-        if (error) throw error;
+      if (error) throw error;
 
-        toast({
-          title: "Check your email",
-          description: "We've sent you a confirmation link to verify your account.",
-        });
-      } else {
-        const { error } = await supabase.auth.signInWithPassword({
-          email,
-          password,
-        });
+      toast({
+        title: "Welcome back!",
+        description: "You've been logged in successfully.",
+      });
 
-        if (error) throw error;
-
-        toast({
-          title: "Welcome back!",
-          description: "You've been logged in successfully.",
-        });
-
-        navigate("/admin/dashboard");
-      }
+      navigate("/admin/dashboard");
     } catch (err: any) {
       setError(err.message || "An error occurred");
     } finally {
