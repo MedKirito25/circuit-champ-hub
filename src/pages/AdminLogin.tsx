@@ -14,7 +14,6 @@ export default function AdminLogin() {
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
-  const [isSignUp, setIsSignUp] = useState(false);
   const navigate = useNavigate();
   const { toast } = useToast();
 
@@ -24,36 +23,19 @@ export default function AdminLogin() {
     setLoading(true);
 
     try {
-      if (isSignUp) {
-        const { error } = await supabase.auth.signUp({
-          email,
-          password,
-          options: {
-            emailRedirectTo: window.location.origin,
-          },
-        });
+      const { error } = await supabase.auth.signInWithPassword({
+        email,
+        password,
+      });
 
-        if (error) throw error;
+      if (error) throw error;
 
-        toast({
-          title: "Check your email",
-          description: "We've sent you a confirmation link to verify your account.",
-        });
-      } else {
-        const { error } = await supabase.auth.signInWithPassword({
-          email,
-          password,
-        });
+      toast({
+        title: "Welcome back!",
+        description: "You've been logged in successfully.",
+      });
 
-        if (error) throw error;
-
-        toast({
-          title: "Welcome back!",
-          description: "You've been logged in successfully.",
-        });
-
-        navigate("/admin/dashboard");
-      }
+      navigate("/admin/dashboard");
     } catch (err: any) {
       setError(err.message || "An error occurred");
     } finally {
@@ -74,12 +56,10 @@ export default function AdminLogin() {
                 <Shield className="w-8 h-8 text-primary" />
               </div>
               <h1 className="font-display text-2xl font-bold mb-2">
-                Admin {isSignUp ? "Sign Up" : "Login"}
+                Admin Login
               </h1>
               <p className="text-muted-foreground">
-                {isSignUp
-                  ? "Create an account to manage the tournament"
-                  : "Sign in to access the admin dashboard"}
+                Sign in to access the admin dashboard
               </p>
             </div>
 
@@ -135,28 +115,12 @@ export default function AdminLogin() {
                   "Loading..."
                 ) : (
                   <>
-                    {isSignUp ? "Create Account" : "Sign In"}
+                    Sign In
                     <ArrowRight className="w-4 h-4" />
                   </>
                 )}
               </Button>
             </form>
-
-            {/* Toggle */}
-            <div className="mt-6 text-center">
-              <button
-                type="button"
-                onClick={() => {
-                  setIsSignUp(!isSignUp);
-                  setError("");
-                }}
-                className="text-sm text-muted-foreground hover:text-primary transition-colors"
-              >
-                {isSignUp
-                  ? "Already have an account? Sign in"
-                  : "Need an account? Sign up"}
-              </button>
-            </div>
           </div>
         </div>
       </main>
