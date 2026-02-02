@@ -1,10 +1,11 @@
-import { useEffect, useState } from "react";
+import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { Header } from "@/components/Header";
 import { Footer } from "@/components/Footer";
 import { useTeams, useMatches, useCategories, useDivisions } from "@/hooks/useTournamentData";
 import { useGroupsWithTeams } from "@/hooks/useGroupData";
+import { useAdminRole } from "@/hooks/useAdminRole";
 import {
   createTeam,
   deleteTeam,
@@ -32,6 +33,7 @@ import {
   Crown,
   ArrowRight,
   Layers,
+  ShieldAlert,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -57,12 +59,13 @@ import { useQueryClient } from "@tanstack/react-query";
 import { cn } from "@/lib/utils";
 
 export default function AdminDashboard() {
-  const [user, setUser] = useState<any>(null);
-  const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState<"teams" | "groups">("teams");
   const navigate = useNavigate();
   const { toast } = useToast();
   const queryClient = useQueryClient();
+
+  // Use admin role hook for proper server-side authorization check
+  const { user, isAdmin, loading, error: adminError } = useAdminRole();
 
   // Add Team Modal State
   const [addTeamOpen, setAddTeamOpen] = useState(false);
@@ -91,29 +94,12 @@ export default function AdminDashboard() {
     Number(selectedDivision)
   );
 
+  // Redirect if not authenticated
   useEffect(() => {
-    const checkAuth = async () => {
-      const { data: { session } } = await supabase.auth.getSession();
-      if (!session) {
-        navigate("/admin");
-        return;
-      }
-      setUser(session.user);
-      setLoading(false);
-    };
-
-    checkAuth();
-
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
-      if (event === "SIGNED_OUT" || !session) {
-        navigate("/admin");
-      } else {
-        setUser(session.user);
-      }
-    });
-
-    return () => subscription.unsubscribe();
-  }, [navigate]);
+    if (!loading && !user) {
+      navigate("/admin");
+    }
+  }, [loading, user, navigate]);
 
   const handleLogout = async () => {
     await supabase.auth.signOut();
