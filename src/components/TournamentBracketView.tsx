@@ -179,8 +179,8 @@ export function TournamentBracketView({ categoryId, divisionId }: TournamentBrac
                 {/* Connector Lines */}
                 {!isLastStage && stageGroups.length > 0 && (
                   <BracketConnectors
-                    sourceCount={stageGroups.length}
-                    targetCount={(groupsByStage[stages[stageIndex + 1]] || []).length}
+                    sourceGroups={stageGroups}
+                    targetGroups={groupsByStage[stages[stageIndex + 1]] || []}
                     cardHeight={CARD_HEIGHT}
                     verticalGap={VERTICAL_GAP}
                     totalHeight={totalHeight}
@@ -313,8 +313,8 @@ function BracketGroupCard({ group, isSuiveur, isFinal, height }: BracketGroupCar
 }
 
 interface BracketConnectorsProps {
-  sourceCount: number;
-  targetCount: number;
+  sourceGroups: GroupWithTeams[];
+  targetGroups: GroupWithTeams[];
   cardHeight: number;
   verticalGap: number;
   totalHeight: number;
@@ -323,14 +323,17 @@ interface BracketConnectorsProps {
 }
 
 function BracketConnectors({ 
-  sourceCount, 
-  targetCount, 
+  sourceGroups, 
+  targetGroups, 
   cardHeight, 
   verticalGap, 
   totalHeight, 
   width,
   isSuiveur 
 }: BracketConnectorsProps) {
+  const sourceCount = sourceGroups.length;
+  const targetCount = targetGroups.length;
+  
   if (sourceCount === 0 || targetCount === 0) return null;
 
   // Calculate Y positions for source groups
@@ -343,26 +346,61 @@ function BracketConnectors({
 
   const paths: { d: string; key: string }[] = [];
   
-  // Map source to target groups (typically 2:1 ratio in tournament brackets)
-  const sourcesPerTarget = Math.ceil(sourceCount / targetCount);
-  
-  for (let i = 0; i < sourceCount; i++) {
-    const targetIndex = Math.floor(i / sourcesPerTarget);
-    const clampedTargetIndex = Math.min(targetIndex, targetCount - 1);
+  // For each source group, find which target group its winner went to
+  sourceGroups.forEach((sourceGroup, sourceIndex) => {
+    // Get the winner team ID from this source group
+    const winnerTeamId = sourceGroup.winner_team_id;
+    
+    if (!winnerTeamId) {
+      // No winner yet - draw line to the calculated target based on position
+      const sourcesPerTarget = Math.ceil(sourceCount / targetCount);
+      const targetIndex = Math.min(Math.floor(sourceIndex / sourcesPerTarget), targetCount - 1);
+      
+      const sourceY = sourceOffset + sourceIndex * (cardHeight + verticalGap) + cardHeight / 2;
+      const targetY = targetOffset + targetIndex * (cardHeight + verticalGap) + cardHeight / 2;
+      
+      const midX = width / 2;
+      paths.push({
+        d: `M 0 ${sourceY} C ${midX} ${sourceY}, ${midX} ${targetY}, ${width} ${targetY}`,
+        key: `${sourceIndex}-${targetIndex}`
+      });
+      return;
+    }
+    
+    // Find which target group contains this winner
+    const targetIndex = targetGroups.findIndex(targetGroup => 
+      targetGroup.group_teams.some(gt => gt.team_id === winnerTeamId)
+    );
+    
+    if (targetIndex === -1) {
+      // Winner not found in any target group - use position-based fallback
+      const sourcesPerTarget = Math.ceil(sourceCount / targetCount);
+      const fallbackTargetIndex = Math.min(Math.floor(sourceIndex / sourcesPerTarget), targetCount - 1);
+      
+      const sourceY = sourceOffset + sourceIndex * (cardHeight + verticalGap) + cardHeight / 2;
+      const targetY = targetOffset + fallbackTargetIndex * (cardHeight + verticalGap) + cardHeight / 2;
+      
+      const midX = width / 2;
+      paths.push({
+        d: `M 0 ${sourceY} C ${midX} ${sourceY}, ${midX} ${targetY}, ${width} ${targetY}`,
+        key: `${sourceIndex}-${fallbackTargetIndex}`
+      });
+      return;
+    }
     
     // Source Y: center of the source card
-    const sourceY = sourceOffset + i * (cardHeight + verticalGap) + cardHeight / 2;
+    const sourceY = sourceOffset + sourceIndex * (cardHeight + verticalGap) + cardHeight / 2;
     
     // Target Y: center of the target card
-    const targetY = targetOffset + clampedTargetIndex * (cardHeight + verticalGap) + cardHeight / 2;
+    const targetY = targetOffset + targetIndex * (cardHeight + verticalGap) + cardHeight / 2;
     
     // Create curved bezier path
     const midX = width / 2;
     paths.push({
       d: `M 0 ${sourceY} C ${midX} ${sourceY}, ${midX} ${targetY}, ${width} ${targetY}`,
-      key: `${i}-${clampedTargetIndex}`
+      key: `${sourceIndex}-${targetIndex}`
     });
-  }
+  });
 
   const strokeColor = isSuiveur ? "hsl(var(--primary))" : "hsl(var(--secondary))";
 
