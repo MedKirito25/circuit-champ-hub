@@ -323,16 +323,16 @@ interface BracketConnectorsProps {
 }
 
 function BracketConnectors({ 
-  sourceGroups, 
-  targetGroups, 
+  sourceGroups = [], 
+  targetGroups = [], 
   cardHeight, 
   verticalGap, 
   totalHeight, 
   width,
   isSuiveur 
 }: BracketConnectorsProps) {
-  const sourceCount = sourceGroups.length;
-  const targetCount = targetGroups.length;
+  const sourceCount = sourceGroups?.length ?? 0;
+  const targetCount = targetGroups?.length ?? 0;
   
   if (sourceCount === 0 || targetCount === 0) return null;
 
