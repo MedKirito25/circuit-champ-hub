@@ -344,12 +344,13 @@ function BracketConnectors({
   const targetStageHeight = targetCount * cardHeight + (targetCount - 1) * verticalGap;
   const targetOffset = (totalHeight - targetStageHeight) / 2;
 
-  const paths: { d: string; key: string }[] = [];
+  const paths: { d: string; key: string; hasWinner: boolean }[] = [];
   
   // For each source group, find which target group its winner went to
   sourceGroups.forEach((sourceGroup, sourceIndex) => {
     // Get the winner team ID from this source group
     const winnerTeamId = sourceGroup.winner_team_id;
+    const hasWinner = !!winnerTeamId;
     
     if (!winnerTeamId) {
       // No winner yet - draw line to the calculated target based on position
@@ -362,7 +363,8 @@ function BracketConnectors({
       const midX = width / 2;
       paths.push({
         d: `M 0 ${sourceY} C ${midX} ${sourceY}, ${midX} ${targetY}, ${width} ${targetY}`,
-        key: `${sourceIndex}-${targetIndex}`
+        key: `${sourceIndex}-${targetIndex}`,
+        hasWinner: false
       });
       return;
     }
@@ -383,7 +385,8 @@ function BracketConnectors({
       const midX = width / 2;
       paths.push({
         d: `M 0 ${sourceY} C ${midX} ${sourceY}, ${midX} ${targetY}, ${width} ${targetY}`,
-        key: `${sourceIndex}-${fallbackTargetIndex}`
+        key: `${sourceIndex}-${fallbackTargetIndex}`,
+        hasWinner: true
       });
       return;
     }
@@ -398,7 +401,8 @@ function BracketConnectors({
     const midX = width / 2;
     paths.push({
       d: `M 0 ${sourceY} C ${midX} ${sourceY}, ${midX} ${targetY}, ${width} ${targetY}`,
-      key: `${sourceIndex}-${targetIndex}`
+      key: `${sourceIndex}-${targetIndex}`,
+      hasWinner: true
     });
   });
 
@@ -420,17 +424,66 @@ function BracketConnectors({
           <stop offset="50%" stopColor={strokeColor} stopOpacity={0.8} />
           <stop offset="100%" stopColor={strokeColor} stopOpacity={0.5} />
         </linearGradient>
+        {/* Animated gradient for completed connections */}
+        <linearGradient id={`connector-gradient-animated-${isSuiveur ? 'primary' : 'secondary'}`} x1="0%" y1="0%" x2="100%" y2="0%">
+          <stop offset="0%" stopColor={strokeColor} stopOpacity={0.3}>
+            <animate attributeName="stop-opacity" values="0.3;0.8;0.3" dur="2s" repeatCount="indefinite" />
+          </stop>
+          <stop offset="50%" stopColor={strokeColor} stopOpacity={1}>
+            <animate attributeName="stop-opacity" values="1;0.6;1" dur="2s" repeatCount="indefinite" />
+          </stop>
+          <stop offset="100%" stopColor={strokeColor} stopOpacity={0.3}>
+            <animate attributeName="stop-opacity" values="0.3;0.8;0.3" dur="2s" repeatCount="indefinite" />
+          </stop>
+        </linearGradient>
       </defs>
-      {paths.map(({ d, key }) => (
-        <path
-          key={key}
-          d={d}
-          fill="none"
-          stroke={`url(#connector-gradient-${isSuiveur ? 'primary' : 'secondary'})`}
-          strokeWidth={2}
-          strokeLinecap="round"
-        />
+      {paths.map(({ d, key, hasWinner }, index) => (
+        <g key={key}>
+          {/* Background glow for completed paths */}
+          {hasWinner && (
+            <path
+              d={d}
+              fill="none"
+              stroke={strokeColor}
+              strokeWidth={6}
+              strokeLinecap="round"
+              opacity={0.2}
+              className="animate-pulse"
+            />
+          )}
+          {/* Main path */}
+          <path
+            d={d}
+            fill="none"
+            stroke={hasWinner 
+              ? `url(#connector-gradient-animated-${isSuiveur ? 'primary' : 'secondary'})`
+              : `url(#connector-gradient-${isSuiveur ? 'primary' : 'secondary'})`
+            }
+            strokeWidth={hasWinner ? 3 : 2}
+            strokeLinecap="round"
+            style={{
+              strokeDasharray: hasWinner ? 'none' : '1000',
+              strokeDashoffset: hasWinner ? '0' : '1000',
+              animation: hasWinner ? 'none' : `drawLine 1s ease-out ${index * 0.1}s forwards`
+            }}
+          />
+          {/* Animated dot traveling along completed paths */}
+          {hasWinner && (
+            <circle r="3" fill={strokeColor}>
+              <animateMotion dur="3s" repeatCount="indefinite" path={d} />
+            </circle>
+          )}
+        </g>
       ))}
+      <style>
+        {`
+          @keyframes drawLine {
+            to {
+              stroke-dashoffset: 0;
+            }
+          }
+        `}
+      </style>
     </svg>
   );
 }
